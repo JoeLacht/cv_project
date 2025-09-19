@@ -27,65 +27,74 @@ option = st.radio("Выберите источник:", ("📂 Файлы", "�
 
 images = []
 
+# ------------------ Загрузка файлов ------------------
 if option == "📂 Файлы":
     uploaded_files = st.file_uploader(
         "Выберите изображение(я)", type=["jpg", "jpeg", "png"], accept_multiple_files=True
     )
     if uploaded_files:
         for f in uploaded_files:
-            images.append(Image.open(f).convert("RGB"))
+            try:
+                img = Image.open(BytesIO(f.read())).convert("RGB")
+                images.append(img)
+            except Exception as e:
+                st.error(f"❌ Ошибка загрузки файла {f.name}: {e}")
 
+# ------------------ Загрузка по URL ------------------
 elif option == "🌐 Ссылки (URL)":
-    urls = st.text_area("Вставьте ссылки (по одной на строке)", height=100, placeholder="https://example.com/image1.jpg")
+    urls = st.text_area("Вставьте ссылки (по одной на строке)", height=100,
+                        placeholder="https://example.com/image1.jpg")
     if urls:
         for url in urls.splitlines():
             url = url.strip()
             if url:
                 try:
                     response = requests.get(url)
-                    images.append(Image.open(BytesIO(response.content)).convert("RGB"))
-                except:
-                    st.error(f"❌ Ошибка загрузки: {url}")
+                    img = Image.open(BytesIO(response.content)).convert("RGB")
+                    images.append(img)
+                except Exception as e:
+                    st.error(f"❌ Ошибка загрузки: {url} ({e})")
 
-# --- обработка изображений ---
+# ------------------ Обработка изображений ------------------
 if images:
     st.divider()
     st.subheader("⚙️ Результаты обработки")
 
-for idx, image in enumerate(images):
-    with st.container():
-        st.markdown(f"### 🖼 Изображение {idx+1}")
+    for idx, image in enumerate(images):
+        with st.container():
+            st.markdown(f"### 🖼 Изображение {idx+1}")
 
-        col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2)
 
-        with col1:
-            st.image(image, caption="Оригинал", use_container_width=True)
+            with col1:
+                st.image(image, caption="Оригинал", width="stretch")
 
-        # Конвертация для OpenCV
-        img_cv = np.array(image)
-        img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
+            # Конвертация для OpenCV
+            img_cv = np.array(image)
+            img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
 
-        # Детекция кораблей
-        results = model2(img_cv)
-        for r in results:
-            for box in r.boxes.xyxy:
-                x1, y1, x2, y2 = map(int, box)
-                # Рисуем прямоугольник вокруг корабля
-                cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            # Детекция кораблей
+            results = model2(img_cv)
+            for r in results:
+                for box in r.boxes.xyxy:
+                    x1, y1, x2, y2 = map(int, box)
+                    cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
-        # Конвертация обратно в PIL
-        result_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-        result_pil = Image.fromarray(result_img)
+            # Конвертация обратно в PIL
+            result_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+            result_pil = Image.fromarray(result_img)
 
-        with col2:
-            st.image(result_pil, caption="Найденные корабли", use_container_width=True)
+            with col2:
+                st.image(result_pil, caption="Найденные корабли", width="stretch")
 
-        st.download_button(
-            f"📥 Скачать результат {idx+1}",
-            data=BytesIO(cv2.imencode(".jpg", cv2.cvtColor(result_img, cv2.COLOR_RGB2BGR))[1].tobytes()),
-            file_name=f"ships_{idx+1}.jpg",
-            mime="image/jpeg",
-            use_container_width=True
-        )
+            # Кнопка для скачивания
+            st.download_button(
+                f"📥 Скачать результат {idx+1}",
+                data=BytesIO(cv2.imencode(".jpg", cv2.cvtColor(result_img, cv2.COLOR_RGB2BGR))[1].tobytes()),
+                file_name=f"ships_{idx+1}.jpg",
+                mime="image/jpeg",
+                key=f"download_{idx+1}",
+                help="Скачать обработанное изображение с прямоугольниками вокруг кораблей"
+            )
 
-    st.divider()
+        st.divider()
